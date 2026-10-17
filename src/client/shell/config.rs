@@ -60,7 +60,10 @@ impl ClientShellState {
         // Apply only this client's fold changes since the last sync to the folds on disk, so
         // folds the CLI or another window wrote before the watcher caught up survive.
         if let Ok(on_disk) = preferences::load_collapsed_machines(path) {
-            let base = &self.saved_machine_folds;
+            // The folds just read are the synced state even if the store below fails, so a
+            // later save does not mistake another process's folds for this client's edits.
+            let on_disk = preferences::sorted_folds(on_disk);
+            let base = std::mem::replace(&mut self.saved_machine_folds, on_disk.clone());
             let mut merged = on_disk
                 .into_iter()
                 .filter(|fold| !base.contains(fold) || collapsed_machines.contains(fold))
