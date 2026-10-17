@@ -2934,7 +2934,7 @@ fn saved_machine_folds_from_other_processes_apply_once() {
 }
 
 #[test]
-fn chrome_save_keeps_folds_another_process_wrote() {
+fn client_saves_merge_with_folds_another_process_wrote() {
     let path = std::env::temp_dir().join(format!(
         "herdr-client-shell-external-folds-{}.json",
         std::process::id()
@@ -2943,22 +2943,28 @@ fn chrome_save_keeps_folds_another_process_wrote() {
     let (mut state, remote_id) = state_with_remote();
     state.config.preferences_path = Some(path.clone());
     let remote_key = remote_profile().id.to_string();
-    // `herdr machine fold` writes before the watcher reports it; a resize then saves.
+    // `herdr machine fold` writes before the watcher reports it; this client then folds
+    // another machine. Both folds survive.
     preferences::store_collapsed_machines(&path, vec![remote_key.clone()]).expect("cli fold");
     let mut outcome = ClientShellInput::default();
-    state.persist_chrome_preferences(&mut outcome);
-    assert!(outcome.repaint);
-    assert_eq!(state.collapsed_endpoints, HashSet::from([remote_id]));
-    assert_eq!(
-        preferences::load_collapsed_machines(&path).expect("folds"),
-        std::slice::from_ref(&remote_key)
-    );
-    // A fold made in this client after that sync is saved over the file.
-    state.toggle_machine_collapse(ClientEndpointId::Local, &mut ClientShellInput::default());
+    state.toggle_machine_collapse(ClientEndpointId::Local, &mut outcome);
     assert_eq!(
         preferences::load_collapsed_machines(&path).expect("folds"),
         [remote_key, "local".to_owned()]
     );
+    assert_eq!(
+        state.collapsed_endpoints,
+        HashSet::from([ClientEndpointId::Local, remote_id])
+    );
+    // `herdr machine unfold --all`, then a save that changes no fold (a resize).
+    preferences::store_collapsed_machines(&path, Vec::new()).expect("cli unfold");
+    let mut outcome = ClientShellInput::default();
+    state.persist_chrome_preferences(&mut outcome);
+    assert!(outcome.repaint);
+    assert!(state.collapsed_endpoints.is_empty());
+    assert!(preferences::load_collapsed_machines(&path)
+        .expect("folds")
+        .is_empty());
     std::fs::remove_file(path).expect("remove client chrome preferences");
 }
 

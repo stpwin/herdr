@@ -57,16 +57,25 @@ impl ClientShellState {
             })
             .collect::<Vec<_>>();
         collapsed_machines.sort();
-        // Folds unchanged here since the last sync: keep what the CLI or another window wrote
-        // meanwhile instead of overwriting it before the watcher catches up.
-        if collapsed_machines == self.saved_machine_folds {
-            if let Ok(on_disk) = preferences::load_collapsed_machines(path) {
-                let on_disk = preferences::sorted_folds(on_disk);
-                if on_disk != collapsed_machines {
-                    self.collapsed_endpoints = state::collapsed_endpoints_from(on_disk.clone());
-                    collapsed_machines = on_disk;
-                    outcome.repaint = true;
-                }
+        // Apply only this client's fold changes since the last sync to the folds on disk, so
+        // folds the CLI or another window wrote before the watcher caught up survive.
+        if let Ok(on_disk) = preferences::load_collapsed_machines(path) {
+            let base = &self.saved_machine_folds;
+            let mut merged = on_disk
+                .into_iter()
+                .filter(|fold| !base.contains(fold) || collapsed_machines.contains(fold))
+                .collect::<Vec<_>>();
+            merged.extend(
+                collapsed_machines
+                    .iter()
+                    .filter(|fold| !base.contains(fold))
+                    .cloned(),
+            );
+            let merged = preferences::sorted_folds(merged);
+            if merged != collapsed_machines {
+                self.collapsed_endpoints = state::collapsed_endpoints_from(merged.clone());
+                collapsed_machines = merged;
+                outcome.repaint = true;
             }
         }
         let saved_machine_folds = collapsed_machines.clone();
