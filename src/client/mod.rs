@@ -228,16 +228,23 @@ fn run_client_with_mode(
         endpoint_keybindings,
         remote_image_paste_key,
         shell_config,
+        apply_session_folds: false,
     };
 
     crate::logging::startup("client");
     info!(path = %socket_path.display(), "{log_message}");
 
     let endpoint_catalog = if client_rendered_shell && !is_remote_client_process() {
-        endpoint::EndpointCatalog::load().unwrap_or_else(|error| {
-            warn!(%error, "saved SSH endpoint catalog is unavailable");
-            endpoint::EndpointCatalog::default()
-        })
+        match endpoint::EndpointCatalog::load() {
+            Ok(catalog) => {
+                loop_config.apply_session_folds = true;
+                catalog
+            }
+            Err(error) => {
+                warn!(%error, "saved SSH endpoint catalog is unavailable");
+                endpoint::EndpointCatalog::default()
+            }
+        }
     } else {
         endpoint::EndpointCatalog::default()
     };
@@ -499,7 +506,7 @@ async fn run_client_loop(
         shell.set_host_erase_byte(crate::platform::terminal_erase_byte());
         shell.set_graphics_cell_size(initial_cell_width_px, initial_cell_height_px);
         shell.set_endpoint_catalog(&endpoint_catalog.ssh);
-        if !is_remote_client_process() {
+        if config.apply_session_folds {
             shell.apply_session_folds(
                 &crate::session::name_for_client_socket(&client_socket_path()),
                 &endpoint_catalog.ssh,
@@ -843,8 +850,16 @@ async fn run_client_loop(
 
         match event {
             ClientLoopEvent::EndpointCatalog(reload) => pending_catalog = Some(reload),
-            ClientLoopEvent::MachineFolds(saved) => {
+            ClientLoopEvent::MachineFoldsChanged => {
                 let Some(shell) = state.shell.as_mut() else {
+                    continue;
+                };
+                // Read the file now: the watcher's snapshot can predate this client's own
+                // latest save, and adopting it would undo that change.
+                let Some(Ok(saved)) = shell
+                    .preferences_path()
+                    .map(shell_preferences::load_collapsed_machines)
+                else {
                     continue;
                 };
                 if !shell.apply_saved_machine_folds(saved) {

@@ -35,9 +35,9 @@ pub(super) fn watch_machine_folds(
         while !should_quit.load(Ordering::Acquire) {
             if let Ok(current) = shell::preferences::load_collapsed_machines(&path) {
                 if previous.as_ref() != Some(&current) {
-                    previous = Some(current.clone());
+                    previous = Some(current);
                     if event_tx
-                        .blocking_send(ClientLoopEvent::MachineFolds(current))
+                        .blocking_send(ClientLoopEvent::MachineFoldsChanged)
                         .is_err()
                     {
                         break;

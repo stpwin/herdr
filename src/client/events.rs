@@ -25,8 +25,8 @@ pub(super) enum ClientLoopEvent {
     },
     EndpointSupervisor(endpoint::EndpointSupervisorEvent),
     EndpointCatalog(Result<Vec<endpoint::SavedSshEndpoint>, String>),
-    /// Folded machines read back from this client's preferences file.
-    MachineFolds(Vec<String>),
+    /// Folded machines in this client's preferences file changed; the handler re-reads it.
+    MachineFoldsChanged,
     ActivateEndpoint {
         endpoint_id: endpoint::ClientEndpointId,
         target: Option<shell::ClientEndpointFocusTarget>,

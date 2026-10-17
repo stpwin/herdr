@@ -900,6 +900,9 @@ pub(crate) struct ClientShellState {
     pub(super) endpoints: Vec<ClientShellEndpoint>,
     pub(super) active_endpoint_id: ClientEndpointId,
     pub(super) collapsed_endpoints: HashSet<ClientEndpointId>,
+    /// Folds as last read from or written to the preferences file, sorted. Saves merge
+    /// against it so they do not overwrite folds another process wrote meanwhile.
+    pub(super) saved_machine_folds: Vec<String>,
     pub(super) mode: ClientShellMode,
     pub(super) navigate_workspace_id: Option<WorkspaceNavigationTarget>,
     pub(super) pending_workspace_highlight: Option<PendingWorkspaceHighlight>,
@@ -1030,7 +1033,8 @@ impl ClientShellState {
                 .or_default()
                 .extend(saved.collapsed_groups);
         }
-        let collapsed_endpoints = collapsed_endpoints_from(preferences.collapsed_machines);
+        let saved_machine_folds = preferences::sorted_folds(preferences.collapsed_machines);
+        let collapsed_endpoints = collapsed_endpoints_from(saved_machine_folds.clone());
         Self {
             machine_diagnostics: Default::default(),
             config,
@@ -1075,6 +1079,7 @@ impl ClientShellState {
             endpoints: vec![local_endpoint()],
             active_endpoint_id: ClientEndpointId::Local,
             collapsed_endpoints,
+            saved_machine_folds,
             mode: ClientShellMode::Terminal,
             navigate_workspace_id: None,
             pending_workspace_highlight: None,
@@ -1898,7 +1903,7 @@ impl ClientShellState {
     }
 }
 
-fn collapsed_endpoints_from(saved: Vec<String>) -> HashSet<ClientEndpointId> {
+pub(super) fn collapsed_endpoints_from(saved: Vec<String>) -> HashSet<ClientEndpointId> {
     saved
         .into_iter()
         .filter_map(|saved| {
@@ -1920,7 +1925,8 @@ impl ClientShellState {
     /// Adopts folds another process wrote to this client's preferences file, such as
     /// `herdr machine fold`. Returns whether the sidebar changed.
     pub(crate) fn apply_saved_machine_folds(&mut self, saved: Vec<String>) -> bool {
-        let next = collapsed_endpoints_from(saved);
+        self.saved_machine_folds = preferences::sorted_folds(saved);
+        let next = collapsed_endpoints_from(self.saved_machine_folds.clone());
         if next == self.collapsed_endpoints {
             return false;
         }

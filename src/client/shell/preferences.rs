@@ -76,6 +76,12 @@ fn read(path: &Path) -> Result<Option<ClientChromePreferences>, String> {
         .map_err(|error| format!("invalid client shell state {}: {error}", path.display()))
 }
 
+pub(super) fn sorted_folds(mut folds: Vec<String>) -> Vec<String> {
+    folds.sort();
+    folds.dedup();
+    folds
+}
+
 pub(crate) fn load_collapsed_machines(path: &Path) -> Result<Vec<String>, String> {
     Ok(read(path)?
         .map(|preferences| preferences.collapsed_machines)
@@ -83,14 +89,9 @@ pub(crate) fn load_collapsed_machines(path: &Path) -> Result<Vec<String>, String
 }
 
 /// Replaces only the folded machines, keeping every other saved preference.
-pub(crate) fn store_collapsed_machines(
-    path: &Path,
-    mut machines: Vec<String>,
-) -> Result<(), String> {
+pub(crate) fn store_collapsed_machines(path: &Path, machines: Vec<String>) -> Result<(), String> {
     let mut preferences = read(path)?.unwrap_or_default();
-    machines.sort();
-    machines.dedup();
-    preferences.collapsed_machines = machines;
+    preferences.collapsed_machines = sorted_folds(machines);
     store(path, preferences)
 }
 

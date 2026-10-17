@@ -16,4 +16,7 @@ pub(super) struct ClientLoopConfig {
     pub(super) remote_image_paste_key:
         Option<(crossterm::event::KeyCode, crossterm::event::KeyModifiers)>,
     pub(super) shell_config: Option<shell::ClientShellConfig>,
+    /// The saved-machine catalog loaded at startup, so session folds may replace saved folds.
+    /// A failed load shows no machines and must not erase them.
+    pub(super) apply_session_folds: bool,
 }
